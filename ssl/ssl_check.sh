@@ -1,18 +1,4 @@
 #!/bin/bash
-# Print the number of days till certificate expiration
-#
-# Example:
-#   $ check_cert.sh sleeplessbeastie.eu
-#   81
-#   $ check_cert.sh lwn.net
-#   630
-#
-# Exit codes:
-#   0   - certificate is not expired
-#   1   - certificate is     expired
-#   254 - certificate is empty
-#   255 - DNS resolution failed
-#
 
 # temporary file to store certificate
 certificate_file=$(mktemp)
