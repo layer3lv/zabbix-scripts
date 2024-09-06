@@ -4,6 +4,10 @@ python zabbix_add_host_maintenance.py --host "*" --time 1h
 python zabbix_add_host_maintenance.py --host test.test.com --time 1h
 #Example - multiple hosts
 python zabbix_add_host_maintenance.py --host test1.test.com,test2.test.com --time 1h
+#Example - group
+python zabbix_add_host_maintenance.py --group "test" --time 1h
+#Example - miltiple groups
+python zabbix_add_host_maintenance.py --group "test,test1" --time 1h
 
 
 
