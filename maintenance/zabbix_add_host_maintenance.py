@@ -2,7 +2,6 @@ import requests
 import time
 import argparse
 import re
-import os
 
 # Zabbix server details
 ZABBIX_URL = "http://<your_zabbix_server>/api_jsonrpc.php"  # Replace with your Zabbix server URL
@@ -75,6 +74,38 @@ def get_host_id(host_name):
     else:
         raise Exception(f"Host {host_name} not found")
 
+# Function to get all host IDs from multiple groups
+def get_host_ids_by_groups(group_names):
+    host_ids = {}
+    for group_name in group_names:
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "hostgroup.get",
+            "params": {
+                "output": ["groupid"],
+                "filter": {
+                    "name": [group_name]
+                },
+                "selectHosts": ["hostid", "host"]
+            },
+            "id": 1
+        }
+
+        response = requests.post(ZABBIX_URL, headers=HEADERS, json=payload)
+        result = response.json()
+
+        if "error" in result:
+            raise Exception(f"Error fetching hosts from group {group_name}: {result['error']['data']}")
+
+        if not result['result']:
+            raise Exception(f"Host group {group_name} not found")
+
+        hosts = result['result'][0]['hosts']
+        for host in hosts:
+            host_ids[host['host']] = host['hostid']  # Add to the dictionary, avoiding duplicates
+
+    return host_ids
+
 # Function to create maintenance and return the maintenance ID
 def create_maintenance(host_ids, duration):
     start_time = int(time.time())
@@ -107,41 +138,54 @@ def create_maintenance(host_ids, duration):
 
 # Main function
 def main():
-    parser = argparse.ArgumentParser(description="Create Zabbix maintenance for one or more hosts")
-    parser.add_argument("--host", required=True, help="Comma-separated hostnames or * for all hosts")
+    parser = argparse.ArgumentParser(description="Create Zabbix maintenance for one or more hosts or a group of hosts")
+    parser.add_argument("--host", help="Comma-separated hostnames or * for all hosts")
+    parser.add_argument("--group", help="Comma-separated host group names to apply maintenance to all hosts in those groups")
     parser.add_argument("-t", "--time", required=True, help="Maintenance duration (e.g., '1h', '30m')")
 
     args = parser.parse_args()
-
-    # If * is provided, fetch all host IDs
-    if args.host == '*':
-        print("Fetching all hosts...")
-        hosts = get_all_host_ids()
-        host_ids = list(hosts.values())
-        print(f"Putting all hosts into maintenance: {', '.join(hosts.keys())}")
-    else:
-        # Split the comma-separated hostnames
-        host_names = args.host.split(',')
-        host_ids = []
-
-        for host_name in host_names:
-            host_name = host_name.strip()  # Remove any leading/trailing whitespace
-            if not host_name:
-                continue  # Skip empty hostnames
-
-            host_id = get_host_id(host_name)
-            host_ids.append(host_id)
-            print(f"Found host {host_name} with ID: {host_id}")
 
     # Step 1: Parse the duration argument
     duration_str = args.time
     try:
         duration_seconds = parse_time_arg(duration_str)
 
-        # Step 2: Create maintenance for the selected hosts
+        # Step 2: Determine if we are working with hosts, groups, or all hosts (*)
+        if args.group:
+            # Handle multiple groups by splitting the input
+            group_names = [group.strip() for group in args.group.split(',')]
+            print(f"Fetching hosts from groups: {', '.join(group_names)}...")
+            hosts = get_host_ids_by_groups(group_names)
+            host_ids = list(hosts.values())
+            print(f"Putting all hosts in groups '{', '.join(group_names)}' into maintenance: {', '.join(hosts.keys())}")
+        
+        elif args.host == '*':
+            print("Fetching all hosts...")
+            hosts = get_all_host_ids()
+            host_ids = list(hosts.values())
+            print(f"Putting all hosts into maintenance: {', '.join(hosts.keys())}")
+        
+        elif args.host:
+            # Split the comma-separated hostnames
+            host_names = args.host.split(',')
+            host_ids = []
+
+            for host_name in host_names:
+                host_name = host_name.strip()  # Remove any leading/trailing whitespace
+                if not host_name:
+                    continue  # Skip empty hostnames
+
+                host_id = get_host_id(host_name)
+                host_ids.append(host_id)
+                print(f"Found host {host_name} with ID: {host_id}")
+
+        else:
+            raise Exception("You must specify either --host, --group, or * for all hosts.")
+
+        # Step 3: Create maintenance for the selected hosts
         maintenance_id = create_maintenance(host_ids, duration_seconds)
 
-        # Step 3: Print the maintenance ID and the hosts involved
+        # Step 4: Print the maintenance ID and the hosts involved
         print(f"Successfully created maintenance for the selected hosts with:")
         print(f"- Maintenance ID: {maintenance_id}")
         print(f"Duration: {duration_str}")
