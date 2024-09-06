@@ -1,5 +1,9 @@
-#Example 
+#Example - all hosts
+python zabbix_add_host_maintenance.py --host "*" --time 1h
+#Example - single host
 python zabbix_add_host_maintenance.py --host test.test.com --time 1h
-#Example for multiple hosts
-python zbx_mnt.py --host test1.test.com,test2.test.com --time 1h
+#Example - multiple hosts
+python zabbix_add_host_maintenance.py --host test1.test.com,test2.test.com --time 1h
+
+
 
