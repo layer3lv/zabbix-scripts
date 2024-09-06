@@ -2,7 +2,7 @@ import requests
 import time
 import argparse
 import re
-import sys
+import os
 
 # Zabbix server details
 ZABBIX_URL = "http://<your_zabbix_server>/api_jsonrpc.php"  # Replace with your Zabbix server URL
@@ -30,6 +30,26 @@ def parse_time_arg(time_str):
     else:
         raise ValueError(f"Unsupported time unit: {unit}")
 
+# Function to get all host IDs
+def get_all_host_ids():
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "host.get",
+        "params": {
+            "output": ["hostid", "host"]
+        },
+        "id": 1
+    }
+
+    response = requests.post(ZABBIX_URL, headers=HEADERS, json=payload)
+    result = response.json()
+
+    if "error" in result:
+        raise Exception(f"Error fetching all hosts: {result['error']['data']}")
+
+    hosts = result['result']
+    return {host['host']: host['hostid'] for host in hosts}
+
 # Function to get the host ID based on the host name
 def get_host_id(host_name):
     payload = {
@@ -56,7 +76,7 @@ def get_host_id(host_name):
         raise Exception(f"Host {host_name} not found")
 
 # Function to create maintenance and return the maintenance ID
-def create_maintenance(host_id, host_name, duration):
+def create_maintenance(host_ids, duration):
     start_time = int(time.time())
     end_time = start_time + duration
 
@@ -64,10 +84,10 @@ def create_maintenance(host_id, host_name, duration):
         "jsonrpc": "2.0",
         "method": "maintenance.create",
         "params": {
-            "name": f"Maintenance for host {host_name}",
+            "name": "Maintenance for selected hosts",
             "active_since": start_time,
             "active_till": end_time,
-            "hostids": [host_id],
+            "hostids": host_ids,
             "timeperiods": [{
                 "timeperiod_type": 0,
                 "period": duration
@@ -80,7 +100,7 @@ def create_maintenance(host_id, host_name, duration):
     result = response.json()
 
     if "error" in result:
-        raise Exception(f"Error creating maintenance for {host_name}: {result['error']['data']}")
+        raise Exception(f"Error creating maintenance: {result['error']['data']}")
 
     # Returning maintenance ID
     return result['result']['maintenanceids'][0]
@@ -88,42 +108,46 @@ def create_maintenance(host_id, host_name, duration):
 # Main function
 def main():
     parser = argparse.ArgumentParser(description="Create Zabbix maintenance for one or more hosts")
-    parser.add_argument("--host", required=True, help="Comma-separated hostnames for which to create maintenance")
+    parser.add_argument("--host", required=True, help="Comma-separated hostnames or * for all hosts")
     parser.add_argument("-t", "--time", required=True, help="Maintenance duration (e.g., '1h', '30m')")
 
     args = parser.parse_args()
 
-    # Split the comma-separated hostnames
-    host_names = args.host.split(',')
-    duration_str = args.time
+    # If * is provided, fetch all host IDs
+    if args.host == '*':
+        print("Fetching all hosts...")
+        hosts = get_all_host_ids()
+        host_ids = list(hosts.values())
+        print(f"Putting all hosts into maintenance: {', '.join(hosts.keys())}")
+    else:
+        # Split the comma-separated hostnames
+        host_names = args.host.split(',')
+        host_ids = []
 
-    try:
-        # Step 1: Parse the duration argument
-        duration_seconds = parse_time_arg(duration_str)
-
-        # Step 2: Process each host individually
         for host_name in host_names:
             host_name = host_name.strip()  # Remove any leading/trailing whitespace
             if not host_name:
                 continue  # Skip empty hostnames
 
-            try:
-                # Step 3: Get the host ID
-                host_id = get_host_id(host_name)
+            host_id = get_host_id(host_name)
+            host_ids.append(host_id)
+            print(f"Found host {host_name} with ID: {host_id}")
 
-                # Step 4: Create maintenance for the host with the specified duration
-                maintenance_id = create_maintenance(host_id, host_name, duration_seconds)
+    # Step 1: Parse the duration argument
+    duration_str = args.time
+    try:
+        duration_seconds = parse_time_arg(duration_str)
 
-                # Step 5: Print the host ID and maintenance ID
-                print(f"Successfully created maintenance for host {host_name} with:")
-                print(f"- Host ID: {host_id}")
-                print(f"- Maintenance ID: {maintenance_id}")
-                print(f"Duration: {duration_str}")
-            except Exception as e:
-                print(f"Error processing host {host_name}: {e}")
+        # Step 2: Create maintenance for the selected hosts
+        maintenance_id = create_maintenance(host_ids, duration_seconds)
+
+        # Step 3: Print the maintenance ID and the hosts involved
+        print(f"Successfully created maintenance for the selected hosts with:")
+        print(f"- Maintenance ID: {maintenance_id}")
+        print(f"Duration: {duration_str}")
 
     except Exception as e:
-        print(str(e))
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
