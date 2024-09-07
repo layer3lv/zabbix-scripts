@@ -1,13 +1,24 @@
-#Example - all hosts
-python zabbix_add_host_maintenance.py --host "*" --time 1h
-#Example - single host
-python zabbix_add_host_maintenance.py --host test.test.com --time 1h
-#Example - multiple hosts
-python zabbix_add_host_maintenance.py --host test1.test.com,test2.test.com --time 1h
-#Example - single group
-python zabbix_add_host_maintenance.py --group "test" --time 1h
-#Example - multiple groups
-python zabbix_add_host_maintenance.py --group "test,test1" --time 1h
+# Help
+python zabbix_add_host_maintenance.py --help
+
+Examples of usage: 
+
+Single host: 
+python zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com --time 1h 
+
+Multiple hosts:
+python zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com,host2.example.com --time 30m 
+
+All hosts:
+python zabbix_add_host_maintenance.py --config zbx_api.conf --host "*" --time 2h
+
+Single group:
+python zabbix_add_host_maintenance.py --config zbx_api.conf --group "Linux Servers" --time 1h 
+
+Multiple groups:
+python zabbix_add_host_maintenance.py --config zbx_api.conf --group "LinuxServers,Web Servers" --time 1h
+
+
 
 
 
