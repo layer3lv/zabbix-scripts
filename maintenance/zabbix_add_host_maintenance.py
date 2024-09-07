@@ -2,16 +2,21 @@ import requests
 import time
 import argparse
 import re
+import configparser
+import os
 
-# Zabbix server details
-ZABBIX_URL = "http://<your_zabbix_server>/api_jsonrpc.php"  # Replace with your Zabbix server URL
-API_TOKEN = "your_api_token"  # Replace with your Zabbix API token
+# Load Zabbix configuration from the specified config file
+def load_zabbix_config(config_file):
+    config = configparser.ConfigParser()
+    config.read(config_file)
 
-# Headers for API requests
-HEADERS = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {API_TOKEN}"
-}
+    zabbix_url = config.get('DEFAULT', 'ZABBIX_URL', fallback=None)
+    api_token = config.get('DEFAULT', 'API_TOKEN', fallback=None)
+
+    if not zabbix_url or not api_token:
+        raise Exception("ZABBIX_URL and API_TOKEN must be set in the config file")
+
+    return zabbix_url, api_token
 
 # Function to parse the time argument (e.g., "1h" or "30m")
 def parse_time_arg(time_str):
@@ -30,7 +35,7 @@ def parse_time_arg(time_str):
         raise ValueError(f"Unsupported time unit: {unit}")
 
 # Function to get all host IDs
-def get_all_host_ids():
+def get_all_host_ids(zabbix_url, headers):
     payload = {
         "jsonrpc": "2.0",
         "method": "host.get",
@@ -40,7 +45,7 @@ def get_all_host_ids():
         "id": 1
     }
 
-    response = requests.post(ZABBIX_URL, headers=HEADERS, json=payload)
+    response = requests.post(zabbix_url, headers=headers, json=payload)
     result = response.json()
 
     if "error" in result:
@@ -50,7 +55,7 @@ def get_all_host_ids():
     return {host['host']: host['hostid'] for host in hosts}
 
 # Function to get the host ID based on the host name
-def get_host_id(host_name):
+def get_host_id(zabbix_url, headers, host_name):
     payload = {
         "jsonrpc": "2.0",
         "method": "host.get",
@@ -63,7 +68,7 @@ def get_host_id(host_name):
         "id": 1
     }
 
-    response = requests.post(ZABBIX_URL, headers=HEADERS, json=payload)
+    response = requests.post(zabbix_url, headers=headers, json=payload)
     result = response.json()
 
     if "error" in result:
@@ -75,7 +80,7 @@ def get_host_id(host_name):
         raise Exception(f"Host {host_name} not found")
 
 # Function to get all host IDs from multiple groups
-def get_host_ids_by_groups(group_names):
+def get_host_ids_by_groups(zabbix_url, headers, group_names):
     host_ids = {}
     for group_name in group_names:
         payload = {
@@ -91,7 +96,7 @@ def get_host_ids_by_groups(group_names):
             "id": 1
         }
 
-        response = requests.post(ZABBIX_URL, headers=HEADERS, json=payload)
+        response = requests.post(zabbix_url, headers=headers, json=payload)
         result = response.json()
 
         if "error" in result:
@@ -107,7 +112,7 @@ def get_host_ids_by_groups(group_names):
     return host_ids
 
 # Function to create maintenance and return the maintenance ID
-def create_maintenance(host_ids, duration):
+def create_maintenance(zabbix_url, headers, host_ids, duration):
     start_time = int(time.time())
     end_time = start_time + duration
 
@@ -127,7 +132,7 @@ def create_maintenance(host_ids, duration):
         "id": 1
     }
 
-    response = requests.post(ZABBIX_URL, headers=HEADERS, json=payload)
+    response = requests.post(zabbix_url, headers=headers, json=payload)
     result = response.json()
 
     if "error" in result:
@@ -138,30 +143,58 @@ def create_maintenance(host_ids, duration):
 
 # Main function
 def main():
-    parser = argparse.ArgumentParser(description="Create Zabbix maintenance for one or more hosts or a group of hosts")
+    parser = argparse.ArgumentParser(
+        description="Create Zabbix maintenance for one or more hosts or groups.",
+        epilog="""
+Examples of usage:
+
+  Single host:
+    python zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com --time 1h
+
+  Multiple hosts:
+    python zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com,host2.example.com --time 30m
+
+  All hosts:
+    python zabbix_add_host_maintenance.py --config zbx_api.conf --host "*" --time 2h
+
+  Single group:
+    python zabbix_add_host_maintenance.py --config zbx_api.conf --group "Linux Servers" --time 1h
+
+  Multiple groups:
+    python zabbix_add_host_maintenance.py --config zbx_api.conf --group "Linux Servers,Web Servers" --time 1h
+        """
+    )
+    parser.add_argument("--config", required=True, help="Path to the configuration file")
     parser.add_argument("--host", help="Comma-separated hostnames or * for all hosts")
     parser.add_argument("--group", help="Comma-separated host group names to apply maintenance to all hosts in those groups")
-    parser.add_argument("-t", "--time", required=True, help="Maintenance duration (e.g., '1h', '30m')")
+    parser.add_argument("--time", required=True, help="Maintenance duration (e.g., '1h', '30m')")
 
     args = parser.parse_args()
 
-    # Step 1: Parse the duration argument
-    duration_str = args.time
+    # Step 1: Load configuration from the provided file
     try:
+        zabbix_url, api_token = load_zabbix_config(args.config)
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_token}"
+        }
+
+        # Step 2: Parse the duration argument
+        duration_str = args.time
         duration_seconds = parse_time_arg(duration_str)
 
-        # Step 2: Determine if we are working with hosts, groups, or all hosts (*)
+        # Step 3: Determine if we are working with hosts, groups, or all hosts (*)
         if args.group:
             # Handle multiple groups by splitting the input
             group_names = [group.strip() for group in args.group.split(',')]
             print(f"Fetching hosts from groups: {', '.join(group_names)}...")
-            hosts = get_host_ids_by_groups(group_names)
+            hosts = get_host_ids_by_groups(zabbix_url, headers, group_names)
             host_ids = list(hosts.values())
             print(f"Putting all hosts in groups '{', '.join(group_names)}' into maintenance: {', '.join(hosts.keys())}")
         
         elif args.host == '*':
             print("Fetching all hosts...")
-            hosts = get_all_host_ids()
+            hosts = get_all_host_ids(zabbix_url, headers)
             host_ids = list(hosts.values())
             print(f"Putting all hosts into maintenance: {', '.join(hosts.keys())}")
         
@@ -175,17 +208,17 @@ def main():
                 if not host_name:
                     continue  # Skip empty hostnames
 
-                host_id = get_host_id(host_name)
+                host_id = get_host_id(zabbix_url, headers, host_name)
                 host_ids.append(host_id)
                 print(f"Found host {host_name} with ID: {host_id}")
 
         else:
             raise Exception("You must specify either --host, --group, or * for all hosts.")
 
-        # Step 3: Create maintenance for the selected hosts
-        maintenance_id = create_maintenance(host_ids, duration_seconds)
+        # Step 4: Create maintenance for the selected hosts
+        maintenance_id = create_maintenance(zabbix_url, headers, host_ids, duration_seconds)
 
-        # Step 4: Print the maintenance ID and the hosts involved
+        # Step 5: Print the maintenance ID and the hosts involved
         print(f"Successfully created maintenance for the selected hosts with:")
         print(f"- Maintenance ID: {maintenance_id}")
         print(f"Duration: {duration_str}")
