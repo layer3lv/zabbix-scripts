@@ -116,11 +116,15 @@ def create_maintenance(zabbix_url, headers, host_ids, duration):
     start_time = int(time.time())
     end_time = start_time + duration
 
-    payload = {
+    # Create a unique name by appending the current timestamp
+    unique_name = f"Maintenance for selected hosts - {start_time}"
+
+    # Step 1: Create maintenance with a unique name (timestamp)
+    initial_payload = {
         "jsonrpc": "2.0",
         "method": "maintenance.create",
         "params": {
-            "name": "Maintenance for selected hosts",
+            "name": unique_name,
             "active_since": start_time,
             "active_till": end_time,
             "hostids": host_ids,
@@ -132,14 +136,35 @@ def create_maintenance(zabbix_url, headers, host_ids, duration):
         "id": 1
     }
 
-    response = requests.post(zabbix_url, headers=headers, json=payload)
+    response = requests.post(zabbix_url, headers=headers, json=initial_payload)
     result = response.json()
 
     if "error" in result:
         raise Exception(f"Error creating maintenance: {result['error']['data']}")
 
-    # Returning maintenance ID
-    return result['result']['maintenanceids'][0]
+    # Step 2: Get the maintenance ID
+    maintenance_id = result['result']['maintenanceids'][0]
+
+    # Step 3: Update the maintenance name to include the maintenance ID
+    updated_name = f"Maintenance for selected hosts - Maintenance ID:{maintenance_id}"
+    update_payload = {
+        "jsonrpc": "2.0",
+        "method": "maintenance.update",
+        "params": {
+            "maintenanceid": maintenance_id,
+            "name": updated_name
+        },
+        "id": 1
+    }
+
+    update_response = requests.post(zabbix_url, headers=headers, json=update_payload)
+    update_result = update_response.json()
+
+    if "error" in update_result:
+        raise Exception(f"Error updating maintenance name: {update_result['error']['data']}")
+
+    # Returning the updated maintenance ID
+    return maintenance_id
 
 # Main function
 def main():
