@@ -1,13 +1,13 @@
 Examples of usage: 
 
-Single host: python3 zabbix_maintenance_new.py --config zbx_api.conf --host host1.example.com --time 30m
-Multiple hosts: python3 zabbix_maintenance_new.py --config zbx_api.conf --host host1.example.com,host2.example.com --time 1h
-All hosts: python3 zabbix_maintenance_new.py --config zbx_api.conf --host "*" --time 1h
+Single host: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com --time 30m
+Multiple hosts: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com,host2.example.com --time 1h
+All hosts: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --host "*" --time 1h
 
-Single Group: python3 zabbix_maintenance_new.py --config zbx_api.conf --group "Linux server" --time 1h
-Multiple Groups: python3 zabbix_maintenance_new.py --config zbx_api.conf --group "Linux server,Windows servers" --time 1h
+Single Group: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --group "Linux server" --time 1h
+Multiple Groups: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --group "Linux server,Windows servers" --time 1h
 
-List maintenance tasks: python3 zabbix_maintenance_new.py --config zbx_api.conf --list
+List maintenance tasks: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --list
 
-Delete signle maintenance tasks: python3 zabbix_maintenance_new.py --config zbx_api.conf --delete 53
-Delete multiple maintenance tasks: python3 zabbix_maintenance_new.py --config zbx_api.conf --delete 53,54
+Delete signle maintenance tasks: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --delete 53
+Delete multiple maintenance tasks: python3 zabbix_add_host_maintenance.py --config zbx_api.conf --delete 53,54
