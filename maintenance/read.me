@@ -1,19 +1,6 @@
-python3 zabbix_maintenance_new.py --help
-usage: zabbix_maintenance_new.py [-h] --config CONFIG [--host HOST] [--group GROUP] [--time TIME] [--list] [--delete DELETE]
-
-Create, list, or delete Zabbix maintenance tasks for one or more hosts or groups.
-
-options:
-  -h, --help       show this help message and exit
-  --config CONFIG  Path to the configuration file
-  --host HOST      Comma-separated hostnames or "*" for all hosts
-  --group GROUP    Comma-separated host group names to apply maintenance to all hosts in those groups
-  --time TIME      Maintenance duration (e.g., '1h', '30m')
-  --list           List all active maintenance tasks
-  --delete DELETE  Comma-separated maintenance IDs to delete
-
 Examples of usage: 
-Single host: python3 zabbix_maintenance_new.py --config zbx_api.conf --host host1.example.com --time 1h
+
+Single host: python3 zabbix_maintenance_new.py --config zbx_api.conf --host host1.example.com --time 30m
 Multiple hosts: python3 zabbix_maintenance_new.py --config zbx_api.conf --host host1.example.com,host2.example.com --time 1h
 All hosts: python3 zabbix_maintenance_new.py --config zbx_api.conf --host "*" --time 1h
 
