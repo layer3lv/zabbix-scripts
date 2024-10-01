@@ -166,37 +166,70 @@ def create_maintenance(zabbix_url, headers, host_ids, duration):
     # Returning the updated maintenance ID
     return maintenance_id
 
+# Function to list all maintenance tasks
+def list_maintenance_tasks(zabbix_url, headers):
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "maintenance.get",
+        "params": {
+            "output": ["maintenanceid", "name", "active_since", "active_till"],
+            "sortfield": "active_since",
+            "sortorder": "DESC"
+        },
+        "id": 1
+    }
+
+    response = requests.post(zabbix_url, headers=headers, json=payload)
+    result = response.json()
+
+    if "error" in result:
+        raise Exception(f"Error listing maintenance tasks: {result['error']['data']}")
+
+    return result['result']
+
+# Function to delete multiple maintenance tasks by their IDs
+def delete_maintenance_tasks(zabbix_url, headers, maintenance_ids):
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "maintenance.delete",
+        "params": maintenance_ids,  # Send a list of maintenance IDs to delete
+        "id": 1
+    }
+
+    response = requests.post(zabbix_url, headers=headers, json=payload)
+    result = response.json()
+
+    if "error" in result:
+        raise Exception(f"Error deleting maintenance tasks {maintenance_ids}: {result['error']['data']}")
+
+    return result['result']['maintenanceids']
+
 # Main function
 def main():
     parser = argparse.ArgumentParser(
-        description="Create Zabbix maintenance for one or more hosts or groups.",
+        description="Create, list, or delete Zabbix maintenance tasks for one or more hosts or groups.",
         epilog="""
 Examples of usage:
 
   Single host:
-    python zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com --time 1h
+    python zabbix_maintenance_new.py --config zbx_api.conf --host host1.example.com --time 1h
 
-  Multiple hosts:
-    python zabbix_add_host_maintenance.py --config zbx_api.conf --host host1.example.com,host2.example.com --time 30m
+  List maintenance tasks:
+    python zabbix_maintenance_new.py --config zbx_api.conf --list
 
-  All hosts:
-    python zabbix_add_host_maintenance.py --config zbx_api.conf --host "*" --time 2h
-
-  Single group:
-    python zabbix_add_host_maintenance.py --config zbx_api.conf --group "Linux Servers" --time 1h
-
-  Multiple groups:
-    python zabbix_add_host_maintenance.py --config zbx_api.conf --group "Linux Servers,Web Servers" --time 1h
+  Delete multiple maintenance tasks:
+    python zabbix_maintenance_new.py --config zbx_api.conf --delete 53,54
         """
     )
     parser.add_argument("--config", required=True, help="Path to the configuration file")
     parser.add_argument("--host", help="Comma-separated hostnames or * for all hosts")
     parser.add_argument("--group", help="Comma-separated host group names to apply maintenance to all hosts in those groups")
-    parser.add_argument("--time", required=True, help="Maintenance duration (e.g., '1h', '30m')")
+    parser.add_argument("--time", help="Maintenance duration (e.g., '1h', '30m')")
+    parser.add_argument("--list", action="store_true", help="List all active maintenance tasks")
+    parser.add_argument("--delete", help="Comma-separated maintenance IDs to delete")
 
     args = parser.parse_args()
 
-    # Step 1: Load configuration from the provided file
     try:
         zabbix_url, api_token = load_zabbix_config(args.config)
         headers = {
@@ -204,49 +237,47 @@ Examples of usage:
             "Authorization": f"Bearer {api_token}"
         }
 
-        # Step 2: Parse the duration argument
-        duration_str = args.time
-        duration_seconds = parse_time_arg(duration_str)
-
-        # Step 3: Determine if we are working with hosts, groups, or all hosts (*)
-        if args.group:
-            # Handle multiple groups by splitting the input
-            group_names = [group.strip() for group in args.group.split(',')]
-            print(f"Fetching hosts from groups: {', '.join(group_names)}...")
-            hosts = get_host_ids_by_groups(zabbix_url, headers, group_names)
-            host_ids = list(hosts.values())
-            print(f"Putting all hosts in groups '{', '.join(group_names)}' into maintenance: {', '.join(hosts.keys())}")
+        if args.list:
+            # List all maintenance tasks
+            tasks = list_maintenance_tasks(zabbix_url, headers)
+            for task in tasks:
+                start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(task['active_since'])))
+                end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(task['active_till'])))
+                print(f"Maintenance ID: {task['maintenanceid']}, Name: {task['name']}, Start: {start_time}, End: {end_time}")
         
-        elif args.host == '*':
-            print("Fetching all hosts...")
-            hosts = get_all_host_ids(zabbix_url, headers)
-            host_ids = list(hosts.values())
-            print(f"Putting all hosts into maintenance: {', '.join(hosts.keys())}")
-        
-        elif args.host:
-            # Split the comma-separated hostnames
-            host_names = args.host.split(',')
-            host_ids = []
+        elif args.delete:
+            # Delete the specified maintenance tasks (comma-separated list)
+            maintenance_ids = [maintenance_id.strip() for maintenance_id in args.delete.split(',')]
+            deleted_ids = delete_maintenance_tasks(zabbix_url, headers, maintenance_ids)
+            print(f"Deleted maintenance task(s) with ID(s): {', '.join(deleted_ids)}")
 
-            for host_name in host_names:
-                host_name = host_name.strip()  # Remove any leading/trailing whitespace
-                if not host_name:
-                    continue  # Skip empty hostnames
+        elif args.time:
+            # Create maintenance based on hosts or groups
+            duration_seconds = parse_time_arg(args.time)
 
-                host_id = get_host_id(zabbix_url, headers, host_name)
-                host_ids.append(host_id)
-                print(f"Found host {host_name} with ID: {host_id}")
+            if args.group:
+                group_names = [group.strip() for group in args.group.split(',')]
+                hosts = get_host_ids_by_groups(zabbix_url, headers, group_names)
+                host_ids = list(hosts.values())
+                print(f"Putting all hosts in groups '{', '.join(group_names)}' into maintenance.")
+            
+            elif args.host == '*':
+                hosts = get_all_host_ids(zabbix_url, headers)
+                host_ids = list(hosts.values())
+                print("Putting all hosts into maintenance.")
+            
+            elif args.host:
+                host_names = args.host.split(',')
+                host_ids = [get_host_id(zabbix_url, headers, host_name.strip()) for host_name in host_names]
+            
+            else:
+                raise Exception("You must specify either --host, --group, or * for all hosts.")
+
+            maintenance_id = create_maintenance(zabbix_url, headers, host_ids, duration_seconds)
+            print(f"Successfully created maintenance with ID: {maintenance_id}")
 
         else:
-            raise Exception("You must specify either --host, --group, or * for all hosts.")
-
-        # Step 4: Create maintenance for the selected hosts
-        maintenance_id = create_maintenance(zabbix_url, headers, host_ids, duration_seconds)
-
-        # Step 5: Print the maintenance ID and the hosts involved
-        print(f"Successfully created maintenance for the selected hosts with:")
-        print(f"- Maintenance ID: {maintenance_id}")
-        print(f"Duration: {duration_str}")
+            raise Exception("You must specify either --list, --delete, or provide time for maintenance creation.")
 
     except Exception as e:
         print(f"Error: {e}")
