@@ -20,5 +20,7 @@ All hosts: python3 zabbix_maintenance_new.py --config zbx_api.conf --host "*" --
 Single Group: python3 zabbix_maintenance_new.py --config zbx_api.conf --group "Linux server" --time 1h
 Multiple Groups: python3 zabbix_maintenance_new.py --config zbx_api.conf --group "Linux server,Windows servers" --time 1h
 
-List maintenance tasks: python3 zabbix_maintenance_new.py --config zbx_api.conf --list 
+List maintenance tasks: python3 zabbix_maintenance_new.py --config zbx_api.conf --list
+
+Delete signle maintenance tasks: python3 zabbix_maintenance_new.py --config zbx_api.conf --delete 53
 Delete multiple maintenance tasks: python3 zabbix_maintenance_new.py --config zbx_api.conf --delete 53,54
